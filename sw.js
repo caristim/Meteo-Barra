@@ -7,7 +7,11 @@ self.addEventListener('install', event => {
         './',
         './index.html',
         './style.css',
-        './script.js'
+        './script.js',
+        './manifest.json',
+        './Icons/apple-touch-icon.png',
+        './Icons/icon-192.png',
+        './Icons/icon-512.png'
       ]))
   );
 });
