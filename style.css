@@ -1,0 +1,719 @@
+import {
+  initializeApp
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  getDocs,
+  query,
+  orderBy
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+
+  apiKey: "AIzaSyCwDBudjX8-PPNwAZ9DX7YhXoOv1J4WbfI",
+
+  authDomain: "meteo-barra.firebaseapp.com",
+
+  projectId: "meteo-barra",
+
+  storageBucket: "meteo-barra.firebasestorage.app",
+
+  messagingSenderId: "147460415233",
+
+  appId: "1:147460415233:web:4301c0ac30259692c40500"
+};
+
+const app =
+  initializeApp(firebaseConfig);
+
+const db =
+  getFirestore(app);
+
+// ─── MIGRACIÓN DATOS LOCALES ─────────────────────────────────────────────────
+
+async function migrarDatosLocales() {
+
+  const datosLocales =
+    JSON.parse(
+      localStorage.getItem(
+        "historialMeteorologico"
+      )
+    ) || [];
+
+  if (datosLocales.length === 0)
+    return;
+
+  const existentes =
+    await getDocs(
+      collection(db, "meteorologia")
+    );
+
+  if (!existentes.empty)
+    return;
+
+  for (const dato of datosLocales) {
+
+    await addDoc(
+      collection(db, "meteorologia"),
+      dato
+    );
+  }
+
+  alert(
+    "✅ Datos locales migrados correctamente"
+  );
+}
+
+// ─── FASE LUNAR ───────────────────────────────────────────────────────────────
+
+function obtenerFaseLunar() {
+
+  const hoy = new Date();
+
+  const lp = 2551443;
+
+  const nuevaLuna =
+    new Date(1970, 0, 7, 20, 35, 0);
+
+  const fase =
+    ((hoy.getTime() - nuevaLuna.getTime()) / 1000) % lp;
+
+  const dias =
+    Math.floor(fase / (24 * 3600));
+
+  if (dias < 2)  return "🌑 Luna Nueva";
+  if (dias < 7)  return "🌒 Luna Creciente";
+  if (dias < 10) return "🌓 Cuarto Creciente";
+  if (dias < 15) return "🌔 Luna creciente avanzada";
+  if (dias < 18) return "🌕 Luna Llena";
+  if (dias < 22) return "🌖 Luna menguante avanzada";
+  if (dias < 25) return "🌗 Cuarto Menguante";
+
+  return "🌘 Luna Menguante";
+}
+
+// ─── GUARDAR DATOS ────────────────────────────────────────────────────────────
+
+window.guardarDatos =
+async function guardarDatos() {
+
+  const temperatura =
+    parseFloat(
+      document.getElementById("temperatura").value
+    );
+
+  const humedad =
+    parseFloat(
+      document.getElementById("humedad").value
+    );
+
+  const vientoMS =
+    parseFloat(
+      document.getElementById("viento").value
+    );
+
+  const direccionViento =
+    document.getElementById("direccionViento").value;
+
+  const presion =
+    parseFloat(
+      document.getElementById("presion").value
+    );
+
+  const lluvia =
+    parseFloat(
+      document.getElementById("lluvia").value
+    );
+
+  if (
+    isNaN(temperatura) ||
+    isNaN(humedad) ||
+    isNaN(vientoMS) ||
+    isNaN(presion) ||
+    isNaN(lluvia)
+  ) {
+
+    alert("Complete todos los campos");
+
+    return;
+  }
+
+  const vientoKMH =
+    parseFloat(
+      (vientoMS * 3.6).toFixed(1)
+    );
+
+  const ahora =
+    new Date();
+
+  const nuevaMedicion = {
+
+    fecha:
+      ahora.toLocaleDateString(),
+
+    hora:
+      ahora.toLocaleTimeString(),
+
+    faseLunar:
+      obtenerFaseLunar(),
+
+    temperatura,
+
+    humedad,
+
+    vientoKMH,
+
+    direccionViento,
+
+    presion,
+
+    lluvia,
+
+    timestamp:
+      Date.now()
+  };
+
+  await addDoc(
+    collection(db, "meteorologia"),
+    nuevaMedicion
+  );
+
+  limpiarCampos();
+
+  cargarDatos();
+};
+
+function limpiarCampos() {
+
+  document.getElementById("temperatura").value = "";
+  document.getElementById("humedad").value = "";
+  document.getElementById("viento").value = "";
+  document.getElementById("presion").value = "";
+  document.getElementById("lluvia").value = "";
+}
+
+// ─── CARGA PRINCIPAL ──────────────────────────────────────────────────────────
+
+async function cargarDatos() {
+
+  const q =
+    query(
+      collection(db, "meteorologia"),
+      orderBy("timestamp")
+    );
+
+  const querySnapshot =
+    await getDocs(q);
+
+  const historial = [];
+
+  querySnapshot.forEach(doc => {
+
+    historial.push(doc.data());
+  });
+
+  if (historial.length === 0)
+    return;
+
+  mostrarDatos(historial);
+
+  mostrarHistorial(historial);
+
+  generarPronostico(historial);
+
+  generarPronosticoExtendido(historial);
+
+  calcularEstabilidad(historial);
+
+  detectarFrentes(historial);
+
+  generarAlertas(historial);
+}
+
+// ─── ÚLTIMA MEDICIÓN ──────────────────────────────────────────────────────────
+
+function mostrarDatos(historial) {
+
+  const datos =
+    historial[historial.length - 1];
+
+  document.getElementById(
+    "datosActuales"
+  ).innerHTML = `
+
+    📅 ${datos.fecha}<br>
+
+    🕒 ${datos.hora}<br>
+
+    🌙 ${datos.faseLunar}<br><br>
+
+    🌡 ${datos.temperatura} °C<br>
+
+    💧 ${datos.humedad}%<br>
+
+    💨 ${datos.vientoKMH} km/h<br>
+
+    🧭 ${datos.direccionViento}<br>
+
+    📉 ${datos.presion} hPa<br>
+
+    🌧 ${datos.lluvia} mm
+  `;
+}
+
+// ─── PRONÓSTICO ACTUAL ────────────────────────────────────────────────────────
+
+function generarPronostico(historial) {
+
+  const datos =
+    historial[historial.length - 1];
+
+  const clasificacion =
+    clasificarTiempo(datos, historial);
+
+  const mensaje =
+    clasificacion.resumen;
+
+  document.getElementById(
+    "prediccion"
+  ).innerHTML = `
+
+    🌡 ${datos.temperatura} °C<br>
+
+    💧 ${datos.humedad}%<br>
+
+    💨 ${datos.vientoKMH} km/h<br>
+
+    🧭 ${datos.direccionViento}<br>
+
+    📉 ${datos.presion} hPa<br>
+
+    🌧 ${datos.lluvia} mm<br><br>
+
+    <strong>🏷 Clasificación:</strong><br>
+    ${clasificacion.etiqueta}<br><br>
+
+    <strong>Pronóstico:</strong><br>
+
+    ${mensaje}
+  `;
+}
+
+// ─── CLASIFICACIÓN AUTOMÁTICA DEL TIEMPO ─────────────────────────────────────
+
+function clasificarTiempo(datos, historial) {
+
+  const { temperatura, humedad, presion, vientoKMH, lluvia } = datos;
+
+  let etiqueta = "☀️ Tiempo despejado";
+  let resumen  = "⛅ Tiempo relativamente estable.";
+
+  // Lluvia activa
+  if (lluvia > 5) {
+    etiqueta = "🌧 Lluvia moderada a intensa";
+    resumen  = "🌧 Se registra precipitación activa. Riesgo de acumulación.";
+  } else if (lluvia > 0) {
+    etiqueta = "🌦 Lluvia leve";
+    resumen  = "🌦 Lluvia leve en curso. Posible mejora posterior.";
+  }
+
+  // Tormenta potencial
+  if (humedad > 90 && presion < 1000 && vientoKMH > 40) {
+    etiqueta = "⛈ Condiciones de tormenta";
+    resumen  = "⛈ Alta probabilidad de tormenta eléctrica. Precaución máxima.";
+  }
+
+  // Frío extremo
+  if (temperatura < 2) {
+    etiqueta = "🥶 Frío extremo";
+    resumen  = "🥶 Temperaturas bajo o próximas al punto de congelación. Riesgo de helada.";
+  }
+
+  // Calor intenso
+  if (temperatura > 35) {
+    etiqueta = "🔥 Calor intenso";
+    resumen  = "🔥 Temperatura muy elevada. Riesgo de golpe de calor.";
+  }
+
+  // Niebla potencial
+  if (humedad > 95 && vientoKMH < 10 && temperatura < 20) {
+    etiqueta = "🌫 Condiciones de niebla";
+    resumen  = "🌫 Alta probabilidad de formación de niebla o neblina densa.";
+  }
+
+  // Presión muy baja general
+  if (presion < 1005 && humedad > 85 && etiqueta === "☀️ Tiempo despejado") {
+    etiqueta = "🌧 Alta probabilidad de lluvias";
+    resumen  = "🌧 Alta probabilidad de lluvias próximas.";
+  }
+
+  // Vientos fuertes
+  if (vientoKMH > 60) {
+    resumen += " 💨 Vientos muy fuertes, posibles rachas peligrosas.";
+  } else if (vientoKMH > 45) {
+    resumen += " 💨 Vientos fuertes.";
+  }
+
+  return { etiqueta, resumen };
+}
+
+// ─── PRONÓSTICO EXTENDIDO (+6h, +12h, +24h) ──────────────────────────────────
+
+function generarPronosticoExtendido(historial) {
+
+  if (historial.length < 2) return;
+
+  document.getElementById("pronosticoExtendido").style.display = "block";
+
+  // Calcular tendencias con los últimos datos disponibles
+  const n    = historial.length;
+  const ult  = historial[n - 1];
+  const prev = historial[Math.max(n - 4, 0)]; // hasta 4 registros atrás
+
+  const diffHoras = Math.max(
+    (ult.timestamp - prev.timestamp) / 3600000, 0.1
+  );
+
+  // Tasas de cambio por hora
+  const deltaTempH   = (ult.temperatura  - prev.temperatura)  / diffHoras;
+  const deltaHumH    = (ult.humedad      - prev.humedad)      / diffHoras;
+  const deltaPresH   = (ult.presion      - prev.presion)      / diffHoras;
+  const deltaVientoH = (ult.vientoKMH   - prev.vientoKMH)   / diffHoras;
+
+  [6, 12, 24].forEach(horas => {
+
+    const tempEst   = +(ult.temperatura + deltaTempH   * horas).toFixed(1);
+    const humEst    = Math.min(100, Math.max(0, +(ult.humedad + deltaHumH * horas).toFixed(0)));
+    const presEst   = +(ult.presion     + deltaPresH   * horas).toFixed(1);
+    const vientoEst = Math.max(0, +(ult.vientoKMH + deltaVientoH * horas).toFixed(1));
+
+    // Generar clasificación proyectada
+    const datosSim = {
+      temperatura: tempEst,
+      humedad:     humEst,
+      presion:     presEst,
+      vientoKMH:   vientoEst,
+      lluvia:      ult.lluvia
+    };
+
+    const clasif = clasificarTiempo(datosSim, historial);
+
+    const id = `pronostico${horas}h`;
+
+    document.getElementById(id).querySelector(
+      ".pronostico-contenido"
+    ).innerHTML = `
+      ${clasif.etiqueta}<br><br>
+      🌡 ${tempEst} °C<br>
+      💧 ${humEst}%<br>
+      💨 ${vientoEst} km/h<br>
+      📉 ${presEst} hPa<br><br>
+      <em>${clasif.resumen}</em>
+    `;
+  });
+}
+
+// ─── ÍNDICE DE ESTABILIDAD ATMOSFÉRICA ───────────────────────────────────────
+// Basado en versión simplificada del índice K y señales de campo
+
+function calcularEstabilidad(historial) {
+
+  if (historial.length < 2) return;
+
+  document.getElementById("analisisContainer").style.display = "grid";
+
+  const datos = historial[historial.length - 1];
+  const { temperatura, humedad, presion, vientoKMH } = datos;
+
+  // Punto de rocío aproximado (fórmula de Magnus simplificada)
+  const Td = temperatura - ((100 - humedad) / 5);
+
+  // Índice K simplificado (sin radiosondeo, basado en superficie)
+  // K = T850 - T500 + Td850 - (T700 - Td700)
+  // Aproximación: usamos temperatura y humedad de superficie como proxy
+  const indiceK = (temperatura * 0.85) + Td - (temperatura * 0.5 - Td * 0.5);
+
+  // Índice de Showalter simplificado (proxy)
+  const showalter = presion > 1013
+    ? 5
+    : presion > 1000
+      ? 2
+      : presion > 990
+        ? -1
+        : -4;
+
+  // Clasificación
+  let nivelEstabilidad, colorEstabilidad, descripcion;
+
+  if (indiceK < 20 && showalter > 3) {
+    nivelEstabilidad  = "✅ Atmósfera muy estable";
+    colorEstabilidad  = "#22c55e";
+    descripcion       = "Sin convección. Baja probabilidad de tormentas.";
+  } else if (indiceK < 30 && showalter > 0) {
+    nivelEstabilidad  = "🟡 Atmósfera moderadamente estable";
+    colorEstabilidad  = "#eab308";
+    descripcion       = "Convección débil posible. Riesgo bajo de tormentas aisladas.";
+  } else if (indiceK < 40 || showalter <= 0) {
+    nivelEstabilidad  = "🟠 Atmósfera inestable";
+    colorEstabilidad  = "#f97316";
+    descripcion       = "Convección moderada. Tormentas posibles.";
+  } else {
+    nivelEstabilidad  = "🔴 Atmósfera muy inestable";
+    colorEstabilidad  = "#ef4444";
+    descripcion       = "Alta inestabilidad. Tormentas severas probables.";
+  }
+
+  document.getElementById("estabilidad").innerHTML = `
+    <div style="font-size:18px; font-weight:bold; color:${colorEstabilidad}; margin-bottom:10px;">
+      ${nivelEstabilidad}
+    </div>
+    🌡 Temperatura: ${temperatura} °C<br>
+    💧 Humedad: ${humedad}%<br>
+    🌡 Punto de rocío: ${Td.toFixed(1)} °C<br>
+    📉 Presión: ${presion} hPa<br>
+    📊 Índice K proxy: ${indiceK.toFixed(1)}<br>
+    📊 Índice Showalter proxy: ${showalter}<br><br>
+    <em>${descripcion}</em>
+  `;
+}
+
+// ─── DETECCIÓN DE FRENTES ─────────────────────────────────────────────────────
+
+function detectarFrentes(historial) {
+
+  if (historial.length < 3) {
+
+    document.getElementById("frentes").innerHTML =
+      "⚠️ Se necesitan al menos 3 mediciones para detectar frentes.";
+
+    return;
+  }
+
+  const n    = historial.length;
+  const ult  = historial[n - 1];
+  const ant  = historial[n - 2];
+  const ant2 = historial[n - 3];
+
+  // Cambios entre últimas mediciones
+  const deltaTemp  = ult.temperatura - ant.temperatura;
+  const deltaPres  = ult.presion     - ant.presion;
+  const deltaHum   = ult.humedad     - ant.humedad;
+  const deltaTemp2 = ant.temperatura - ant2.temperatura;
+  const deltaPres2 = ant.presion     - ant2.presion;
+
+  let tipoFrente  = "🔵 Sin frente detectado";
+  let colorFrente = "#94a3b8";
+  let descripFrente = "Las condiciones se mantienen sin variaciones frontales significativas.";
+
+  // Frente frío: bajada brusca de temperatura, subida de presión, viento cambia a SW/W/NW
+  const vientoFrio =
+    ["SW", "W", "NW", "N"].includes(ult.direccionViento);
+
+  if (
+    deltaTemp <= -2 &&
+    deltaPres >= 1.5 &&
+    deltaHum <= -5 &&
+    vientoFrio
+  ) {
+    tipoFrente    = "🔵 Frente Frío activo";
+    colorFrente   = "#3b82f6";
+    descripFrente = "Descenso brusco de temperatura, presión en aumento y viento del sector W/SW/NW. Paso de frente frío en curso.";
+
+  // Frente cálido: aumento de temperatura, bajada de presión, humedad en alza
+  } else if (
+    deltaTemp >= 2 &&
+    deltaPres <= -1.5 &&
+    deltaHum >= 5
+  ) {
+    tipoFrente    = "🔴 Frente Cálido activo";
+    colorFrente   = "#ef4444";
+    descripFrente = "Temperatura en aumento con presión bajando y humedad elevada. Aproximación de frente cálido.";
+
+  // Frente frío aproximándose: tendencia previa
+  } else if (
+    deltaTemp2 <= -1 &&
+    deltaPres2 >= 0.5 &&
+    deltaTemp <= -1
+  ) {
+    tipoFrente    = "🔵 Frente Frío aproximándose";
+    colorFrente   = "#60a5fa";
+    descripFrente = "Tendencia de enfriamiento sostenida y presión en leve alza. Posible frente frío en aproximación.";
+
+  // Frente cálido aproximándose
+  } else if (
+    deltaTemp2 >= 1 &&
+    deltaPres2 <= -0.5 &&
+    deltaTemp >= 1
+  ) {
+    tipoFrente    = "🔴 Frente Cálido aproximándose";
+    colorFrente   = "#f87171";
+    descripFrente = "Temperaturas en alza sostenida con presión en descenso. Posible frente cálido en aproximación.";
+
+  // Condiciones pre-frontales
+  } else if (
+    deltaPres <= -2 &&
+    deltaHum >= 10
+  ) {
+    tipoFrente    = "🟡 Posible actividad frontal";
+    colorFrente   = "#eab308";
+    descripFrente = "Descenso de presión y aumento de humedad. Posible perturbación frontal en desarrollo.";
+  }
+
+  document.getElementById("frentes").innerHTML = `
+    <div style="font-size:18px; font-weight:bold; color:${colorFrente}; margin-bottom:10px;">
+      ${tipoFrente}
+    </div>
+    📊 Δ Temperatura: ${deltaTemp > 0 ? "+" : ""}${deltaTemp.toFixed(1)} °C<br>
+    📊 Δ Presión: ${deltaPres > 0 ? "+" : ""}${deltaPres.toFixed(1)} hPa<br>
+    📊 Δ Humedad: ${deltaHum > 0 ? "+" : ""}${deltaHum.toFixed(0)}%<br>
+    🧭 Dirección viento: ${ult.direccionViento}<br><br>
+    <em>${descripFrente}</em>
+  `;
+}
+
+// ─── ALERTAS METEOROLÓGICAS ───────────────────────────────────────────────────
+
+function generarAlertas(historial) {
+
+  const datos = historial[historial.length - 1];
+  const { temperatura, humedad, presion, vientoKMH, lluvia } = datos;
+
+  const alertas = [];
+
+  if (vientoKMH > 70) {
+    alertas.push({ nivel: "rojo",    texto: "🚨 ALERTA ROJA: Vientos extremos > 70 km/h" });
+  } else if (vientoKMH > 50) {
+    alertas.push({ nivel: "naranja", texto: "⚠️ ALERTA NARANJA: Vientos fuertes > 50 km/h" });
+  } else if (vientoKMH > 35) {
+    alertas.push({ nivel: "amarillo", texto: "🟡 AVISO: Vientos moderados-fuertes > 35 km/h" });
+  }
+
+  if (lluvia > 20) {
+    alertas.push({ nivel: "rojo",    texto: "🚨 ALERTA ROJA: Lluvia intensa > 20 mm" });
+  } else if (lluvia > 10) {
+    alertas.push({ nivel: "naranja", texto: "⚠️ ALERTA NARANJA: Lluvia moderada > 10 mm" });
+  }
+
+  if (presion < 985) {
+    alertas.push({ nivel: "rojo",    texto: "🚨 ALERTA ROJA: Presión muy baja < 985 hPa — posible ciclón" });
+  } else if (presion < 995) {
+    alertas.push({ nivel: "naranja", texto: "⚠️ ALERTA NARANJA: Presión baja < 995 hPa" });
+  }
+
+  if (temperatura < 0) {
+    alertas.push({ nivel: "azul",    texto: "🔵 ALERTA: Temperatura bajo cero — riesgo de helada" });
+  } else if (temperatura < 3) {
+    alertas.push({ nivel: "azul",    texto: "🔵 AVISO: Temperatura próxima a cero — posible helada" });
+  }
+
+  if (temperatura > 38) {
+    alertas.push({ nivel: "rojo",    texto: "🚨 ALERTA ROJA: Calor extremo > 38 °C" });
+  } else if (temperatura > 33) {
+    alertas.push({ nivel: "naranja", texto: "⚠️ ALERTA NARANJA: Calor intenso > 33 °C" });
+  }
+
+  if (humedad > 95 && temperatura > 28) {
+    alertas.push({ nivel: "naranja", texto: "⚠️ ALERTA: Calor húmedo extremo — índice de calor muy alto" });
+  }
+
+  // Detectar caída rápida de presión en las últimas mediciones (≥ 3 registros)
+  if (historial.length >= 3) {
+    const n     = historial.length;
+    const diff  = historial[n - 1].presion - historial[n - 3].presion;
+    if (diff <= -6) {
+      alertas.push({ nivel: "naranja", texto: "⚠️ ALERTA: Caída rápida de presión — posible tormenta en desarrollo" });
+    }
+  }
+
+  const container = document.getElementById("alertasContainer");
+
+  if (alertas.length === 0) {
+    container.style.display = "none";
+    return;
+  }
+
+  container.style.display = "block";
+
+  container.innerHTML = alertas
+    .map(a => `<div class="alerta alerta-${a.nivel}">${a.texto}</div>`)
+    .join("");
+}
+
+// ─── HISTORIAL ────────────────────────────────────────────────────────────────
+
+function mostrarHistorial(historial) {
+
+  let html = "";
+
+  historial
+    .slice()
+    .reverse()
+    .forEach(item => {
+
+      html += `
+
+        <div class="registro">
+
+          📅 ${item.fecha}
+
+          🕒 ${item.hora}<br>
+
+          🌙 ${item.faseLunar}<br><br>
+
+          🌡 ${item.temperatura} °C |
+
+          💧 ${item.humedad}% |
+
+          💨 ${item.vientoKMH} km/h |
+
+          🧭 ${item.direccionViento} |
+
+          📉 ${item.presion} hPa |
+
+          🌧 ${item.lluvia} mm
+
+        </div>
+      `;
+    });
+
+  document.getElementById(
+    "historial"
+  ).innerHTML = html;
+}
+
+// ─── TOGGLE HISTORIAL ─────────────────────────────────────────────────────────
+
+window.toggleHistorial =
+function toggleHistorial() {
+
+  const contenido =
+    document.getElementById("historialContenido");
+
+  const icono =
+    document.getElementById("historialToggleIcon");
+
+  const visible =
+    contenido.classList.contains("historial-visible");
+
+  if (visible) {
+
+    contenido.classList.remove("historial-visible");
+    contenido.classList.add("historial-oculto");
+    icono.textContent = "▼ Mostrar";
+
+  } else {
+
+    contenido.classList.remove("historial-oculto");
+    contenido.classList.add("historial-visible");
+    icono.textContent = "▲ Ocultar";
+  }
+};
+
+// ─── INICIO ───────────────────────────────────────────────────────────────────
+
+await migrarDatosLocales();
+
+cargarDatos();
