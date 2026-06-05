@@ -4,12 +4,12 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebas
 import { getFirestore, collection, addDoc, query, orderBy, limit, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const firebaseConfig = {
-    apiKey: "TU_API_KEY",
-    authDomain: "TU_PROJECT_ID.firebaseapp.com",
-    projectId: "TU_PROJECT_ID",
-    storageBucket: "TU_PROJECT_ID.appspot.com",
-    messagingSenderId: "TU_SENDER_ID",
-    appId: "TU_APP_ID"
+    apiKey: "AIzaSyCwDBudjX8-PPNwAZ9DX7YhXoOv1J4WbfI",
+    authDomain: "meteo-barra.firebaseapp.com",
+    projectId: "meteo-barra",
+    storageBucket: "meteo-barra.firebasestorage.app"",
+    messagingSenderId: "147460415233",
+    appId: "1:147460415233:web:4301c0ac30259692c40500"
 };
 
 // Inicializar Firebase
