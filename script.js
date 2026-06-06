@@ -1,5 +1,3 @@
-// CONFIGURACIÓN DE FIREBASE
-// IMPORTANTE: Reemplaza con tus credenciales reales
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, collection, addDoc, query, orderBy, limit, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
@@ -17,149 +15,131 @@ const db = getFirestore(app);
 const medicionesRef = collection(db, "meteorologia");
 
 if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch(err => console.error('Error SW', err));
+    window.addEventListener('load', function() {
+        navigator.serviceWorker.register('./sw.js').catch(function(err) {
+            console.error('Error SW', err);
+        });
     });
 }
 
 window.guardarDatos = async function() {
-    const temp = document.getElementById('temperatura').value;
-    const hum = document.getElementById('humedad').value;
-    const viento = document.getElementById('viento').value;
-    const dirViento = document.getElementById('direccionViento').value;
-    const presion = document.getElementById('presion').value;
-    const lluvia = document.getElementById('lluvia').value;
+    var temp     = document.getElementById('temperatura').value;
+    var hum      = document.getElementById('humedad').value;
+    var viento   = document.getElementById('viento').value;
+    var dirViento= document.getElementById('direccionViento').value;
+    var presion  = document.getElementById('presion').value;
+    var lluvia   = document.getElementById('lluvia').value;
 
     if (!temp || !hum) {
         alert("Por favor completa al menos temperatura y humedad.");
         return;
     }
 
-    const ahora = new Date();
-    const nuevaMedicion = {
-        temperatura: parseInt(temp),
-        humedad: parseInt(hum),
-        vientoKMH: parseFloat(viento) || 0,
+    var ahora = new Date();
+    var nuevaMedicion = {
+        temperatura:    parseInt(temp),
+        humedad:        parseInt(hum),
+        vientoKMH:      parseFloat(viento) || 0,
         direccionViento: dirViento,
-        presion: parseInt(presion) || 1013,
-        lluvia: parseInt(lluvia) || 0,
-        fecha: ahora.toLocaleDateString(),
-        hora: ahora.toLocaleTimeString(),
-        timestamp: Date.now(),
-        faseLunar: "Calculada por sistema"
+        presion:        parseInt(presion) || 1013,
+        lluvia:         parseInt(lluvia) || 0,
+        fecha:          ahora.toLocaleDateString(),
+        hora:           ahora.toLocaleTimeString(),
+        timestamp:      Date.now(),
+        faseLunar:      "Calculada por sistema"
     };
 
     try {
         await addDoc(medicionesRef, nuevaMedicion);
         alert("¡Medición guardada correctamente!");
-        limpiarFormulario();
+        document.querySelectorAll('input').forEach(function(i) { i.value = ''; });
     } catch (error) {
         console.error("Error al guardar:", error);
         alert("Error al conectar con Firebase.");
     }
 };
 
-function limpiarFormulario() {
-    document.querySelectorAll('input').forEach(input => input.value = '');
-}
-
-// ESCUCHAR DATOS
-onSnapshot(query(medicionesRef, orderBy("timestamp", "desc"), limit(20)), (snapshot) => {
-    const mediciones = [];
-    snapshot.forEach((doc) => {
-        mediciones.push({ id: doc.id, ...doc.data() });
+onSnapshot(query(medicionesRef, orderBy("timestamp", "desc"), limit(20)), function(snapshot) {
+    var mediciones = [];
+    snapshot.forEach(function(doc) {
+        mediciones.push(Object.assign({ id: doc.id }, doc.data()));
     });
     actualizarInterfaz(mediciones);
 });
 
 function actualizarInterfaz(mediciones) {
     if (mediciones.length === 0) return;
-
-    const ultima = mediciones[0];
+    var u = mediciones[0];
 
     document.getElementById('datosActuales').innerHTML =
-        '<strong>🌡 Temp:</strong> ' + ultima.temperatura + ' °C<br>' +
-        '<strong>💧 Humedad:</strong> ' + ultima.humedad + ' %<br>' +
-        '<strong>💨 Viento:</strong> ' + ultima.vientoKMH + ' km/h (' + ultima.direccionViento + ')<br>' +
-        '<strong>⏲ Presión:</strong> ' + ultima.presion + ' hPa<br>' +
-        '<strong>🌧 Lluvia:</strong> ' + ultima.lluvia + ' mm<br>' +
-        '<small>📅 ' + ultima.fecha + ' - ' + ultima.hora + '</small>';
+        '<strong>🌡 Temp:</strong> ' + u.temperatura + ' °C<br>' +
+        '<strong>💧 Humedad:</strong> ' + u.humedad + ' %<br>' +
+        '<strong>💨 Viento:</strong> ' + u.vientoKMH + ' km/h (' + u.direccionViento + ')<br>' +
+        '<strong>⏲ Presión:</strong> ' + u.presion + ' hPa<br>' +
+        '<strong>🌧 Lluvia:</strong> ' + u.lluvia + ' mm<br>' +
+        '<small>📅 ' + u.fecha + ' - ' + u.hora + '</small>';
 
-    generarPrediccionIA(ultima);
+    generarPrediccionIA(u);
 
-    var historialHTML = mediciones.map(function(m) {
+    document.getElementById('historial').innerHTML = mediciones.map(function(m) {
         return '<div class="registro"><strong>' + m.fecha + ' ' + m.hora + '</strong>: ' +
                m.temperatura + '°C | ' + m.humedad + '% HR | ' + m.vientoKMH + ' km/h</div>';
     }).join('');
-    document.getElementById('historial').innerHTML = historialHTML;
 }
 
-function clasificarTiempo(presion, humedad, vientoKMH) {
-    if (presion < 1010 && humedad > 85) {
-        return { texto: "⛈ Alta probabilidad de tormentas", color: "#ef4444" };
-    } else if (presion < 1015 && humedad > 70) {
-        return { texto: "🌧 Cielos cubiertos con lluvias posibles", color: "#f97316" };
-    } else if (humedad > 80) {
-        return { texto: "🌦 Ambiente húmedo, cielos variables", color: "#facc15" };
-    } else if (vientoKMH > 30) {
-        return { texto: "💨 Vientos fuertes, tiempo cambiante", color: "#a78bfa" };
-    } else {
-        return { texto: "☀️ Tiempo despejado y seco", color: "#38bdf8" };
-    }
+function clasificar(presion, humedad, viento) {
+    if (presion < 1010 && humedad > 85) return { texto: "⛈ Alta probabilidad de tormentas",        color: "#ef4444" };
+    if (presion < 1015 && humedad > 70) return { texto: "🌧 Cielos cubiertos con lluvias posibles", color: "#f97316" };
+    if (humedad > 80)                   return { texto: "🌦 Ambiente húmedo, cielos variables",      color: "#facc15" };
+    if (viento  > 30)                   return { texto: "💨 Vientos fuertes, tiempo cambiante",      color: "#a78bfa" };
+                                        return { texto: "☀️ Tiempo despejado y seco",                color: "#38bdf8" };
 }
 
-function generarPrediccionIA(datos) {
-    // Presión base: si viene 0 o undefined, usamos estándar 1013
-    var presBase = datos.presion && datos.presion > 0 ? datos.presion : 1013;
-    var humBase  = datos.humedad || 0;
-    var vienBase = datos.vientoKMH || 0;
-    var tempBase = datos.temperatura || 0;
+function tarjetaHTML(pred, temp, hum, pres) {
+    return '<span style="color:' + pred.color + '; font-weight:bold;">' + pred.texto + '</span><br>' +
+           '<small>🌡 ' + temp + '°C &nbsp;|&nbsp; 💧 ' + hum + '% &nbsp;|&nbsp; ⏲ ' + pres + ' hPa</small>';
+}
+
+function generarPrediccionIA(d) {
+    var pres = (d.presion  && d.presion  > 0) ? d.presion  : 1013;
+    var hum  = (d.humedad  && d.humedad  > 0) ? d.humedad  : 50;
+    var vien = (d.vientoKMH) ? d.vientoKMH : 0;
+    var temp = (d.temperatura !== undefined) ? d.temperatura : 0;
 
     // Predicción actual
-    var actual = clasificarTiempo(presBase, humBase, vienBase);
+    var predActual = clasificar(pres, hum, vien);
     document.getElementById('prediccion').innerHTML =
-        '<span style="color:' + actual.color + '; font-weight:bold;">' + actual.texto + '</span>';
+        '<span style="color:' + predActual.color + '; font-weight:bold;">' + predActual.texto + '</span>';
 
-    // Mostrar contenedores
-    document.getElementById('analisisContainer').style.display = 'grid';
+    document.getElementById('analisisContainer').style.display   = 'grid';
     document.getElementById('pronosticoExtendido').style.display = 'block';
 
-    // Estabilidad y frentes
-    document.getElementById('estabilidad').innerText = humBase > 75 ? "⚠️ Inestable" : "✅ Estable";
-    document.getElementById('frentes').innerText = vienBase > 15 ? "🌬 Frente ventoso detectado" : "✅ Sin frentes significativos";
+    document.getElementById('estabilidad').innerText = hum > 75 ? "⚠️ Inestable" : "✅ Estable";
+    document.getElementById('frentes').innerText     = vien > 15 ? "🌬 Frente ventoso detectado" : "✅ Sin frentes significativos";
 
-    // Pronóstico +6h
-    var pres6  = Math.round(presBase * 0.998);
-    var hum6   = Math.min(100, Math.round(humBase * 1.02));
-    var pred6  = clasificarTiempo(pres6, hum6, vienBase);
-    var el6    = document.getElementById('pronostico6h');
-    el6.querySelector('.pronostico-contenido').innerHTML =
-        '<span style="color:' + pred6.color + '; font-weight:bold;">' + pred6.texto + '</span><br>' +
-        '<small>🌡 ' + tempBase + '°C &nbsp;|&nbsp; 💧 ' + hum6 + '% &nbsp;|&nbsp; ⏲ ' + pres6 + ' hPa</small>';
+    // +6 horas
+    var p6 = Math.round(pres * 0.998);
+    var h6 = Math.min(100, Math.round(hum * 1.02));
+    document.getElementById('pronostico6h').getElementsByClassName('pronostico-contenido')[0].innerHTML =
+        tarjetaHTML(clasificar(p6, h6, vien), temp, h6, p6);
 
-    // Pronóstico +12h
-    var pres12 = Math.round(presBase * 0.995);
-    var hum12  = Math.min(100, Math.round(humBase * 1.04));
-    var pred12 = clasificarTiempo(pres12, hum12, vienBase);
-    var el12   = document.getElementById('pronostico12h');
-    el12.querySelector('.pronostico-contenido').innerHTML =
-        '<span style="color:' + pred12.color + '; font-weight:bold;">' + pred12.texto + '</span><br>' +
-        '<small>🌡 ' + (tempBase - 1) + '°C &nbsp;|&nbsp; 💧 ' + hum12 + '% &nbsp;|&nbsp; ⏲ ' + pres12 + ' hPa</small>';
+    // +12 horas
+    var p12 = Math.round(pres * 0.995);
+    var h12 = Math.min(100, Math.round(hum * 1.04));
+    document.getElementById('pronostico12h').getElementsByClassName('pronostico-contenido')[0].innerHTML =
+        tarjetaHTML(clasificar(p12, h12, vien), temp - 1, h12, p12);
 
-    // Pronóstico +24h
-    var pres24 = Math.round(presBase * 0.99);
-    var hum24  = Math.min(100, Math.round(humBase * 1.06));
-    var pred24 = clasificarTiempo(pres24, hum24, vienBase);
-    var el24   = document.getElementById('pronostico24h');
-    el24.querySelector('.pronostico-contenido').innerHTML =
-        '<span style="color:' + pred24.color + '; font-weight:bold;">' + pred24.texto + '</span><br>' +
-        '<small>🌡 ' + (tempBase - 2) + '°C &nbsp;|&nbsp; 💧 ' + hum24 + '% &nbsp;|&nbsp; ⏲ ' + pres24 + ' hPa</small>';
+    // +24 horas
+    var p24 = Math.round(pres * 0.990);
+    var h24 = Math.min(100, Math.round(hum * 1.06));
+    document.getElementById('pronostico24h').getElementsByClassName('pronostico-contenido')[0].innerHTML =
+        tarjetaHTML(clasificar(p24, h24, vien), temp - 2, h24, p24);
 }
 
 window.toggleHistorial = function() {
-    var contenido = document.getElementById('historialContenido');
-    var icono = document.getElementById('historialToggleIcon');
-    var visible = contenido.style.display === 'block';
-    contenido.style.display = visible ? 'none' : 'block';
-    icono.innerText = visible ? "▼ Mostrar" : "▲ Ocultar";
+    var c = document.getElementById('historialContenido');
+    var i = document.getElementById('historialToggleIcon');
+    var abierto = c.style.display === 'block';
+    c.style.display = abierto ? 'none' : 'block';
+    i.innerText     = abierto ? "▼ Mostrar" : "▲ Ocultar";
 };
