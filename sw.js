@@ -1,7 +1,7 @@
-const CACHE_NAME = 'meteo-ia-v2';
+// Cambiar este número cada vez que actualices la app
+const CACHE_NAME = 'meteo-barra-v3';
 
 self.addEventListener('install', event => {
-  // Toma control inmediato sin esperar a que se cierren otras pestañas
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => cache.addAll([
@@ -19,21 +19,14 @@ self.addEventListener('install', event => {
 
 self.addEventListener('activate', event => {
   event.waitUntil(
-    // Elimina todos los cachés viejos (incluidos los de otras apps)
     caches.keys().then(keys =>
-      Promise.all(
-        keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))
-      )
-    ).then(() => {
-      // Toma control de todos los clientes inmediatamente
-      return self.clients.claim();
-    })
+      Promise.all(keys.map(key => caches.delete(key)))
+    ).then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('fetch', event => {
   event.respondWith(
-    caches.match(event.request)
-      .then(response => response || fetch(event.request))
+    fetch(event.request).catch(() => caches.match(event.request))
   );
 });
