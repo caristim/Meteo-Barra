@@ -2,12 +2,12 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebas
 import { getFirestore, collection, addDoc, query, orderBy, limit, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const firebaseConfig = {
-    apiKey: "TU_API_KEY",
-    authDomain: "TU_PROJECT_ID.firebaseapp.com",
-    projectId: "TU_PROJECT_ID",
-    storageBucket: "TU_PROJECT_ID.appspot.com",
-    messagingSenderId: "TU_SENDER_ID",
-    appId: "TU_APP_ID"
+    apiKey: "AIzaSyCwDBudjX8-PPNwAZ9DX7YhXoOv1J4WbfI",
+    authDomain: "meteo-barra.firebaseapp.com",
+    projectId: "meteo-barra",
+    storageBucket: "meteo-barra.firebasestorage.app",
+    messagingSenderId: "147460415233",
+    appId: "1:147460415233:web:4301c0ac30259692c40500"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -79,7 +79,7 @@ function actualizarInterfaz(mediciones) {
         '<strong>🌧 Lluvia:</strong> ' + u.lluvia + ' mm<br>' +
         '<small>📅 ' + u.fecha + ' - ' + u.hora + '</small>';
 
-    generarPrediccionIA(u);
+    generarPrediccionIA(mediciones);
 
     document.getElementById('historial').innerHTML = mediciones.map(function(m) {
         return '<div class="registro"><strong>' + m.fecha + ' ' + m.hora + '</strong>: ' +
@@ -100,40 +100,202 @@ function tarjetaHTML(pred, temp, hum, pres) {
            '<small>🌡 ' + temp + '°C &nbsp;|&nbsp; 💧 ' + hum + '% &nbsp;|&nbsp; ⏲ ' + pres + ' hPa</small>';
 }
 
-function generarPrediccionIA(d) {
-    var pres = (d.presion  && d.presion  > 0) ? d.presion  : 1013;
-    var hum  = (d.humedad  && d.humedad  > 0) ? d.humedad  : 50;
-    var vien = (d.vientoKMH) ? d.vientoKMH : 0;
-    var temp = (d.temperatura !== undefined) ? d.temperatura : 0;
+async function generarPrediccionIA(mediciones) {
 
-    // Predicción actual
-    var predActual = clasificar(pres, hum, vien);
+    if (!mediciones || mediciones.length === 0) return;
+
+    const actual = mediciones[0];
+
+    const pres = actual.presion || 1013;
+    const hum = actual.humedad || 50;
+    const vien = actual.vientoKMH || 0;
+    const temp = actual.temperatura || 0;
+
+    // -------------------------
+    // HISTÓRICO FIREBASE
+    // -------------------------
+
+    let muestras = Math.min(10, mediciones.length);
+
+    let sumaTemp = 0;
+    let sumaHum = 0;
+    let sumaPres = 0;
+
+    for (let i = 0; i < muestras; i++) {
+        sumaTemp += mediciones[i].temperatura || temp;
+        sumaHum += mediciones[i].humedad || hum;
+        sumaPres += mediciones[i].presion || pres;
+    }
+
+    const promTemp = sumaTemp / muestras;
+    const promHum = sumaHum / muestras;
+    const promPres = sumaPres / muestras;
+
+    const tendenciaTemp = temp - promTemp;
+    const tendenciaHum = hum - promHum;
+    const tendenciaPres = pres - promPres;
+
+    // -------------------------
+    // OPEN METEO - BARRA DEL CHUY
+    // -------------------------
+
+    let modelo = null;
+
+    try {
+
+        const url =
+            "https://api.open-meteo.com/v1/forecast" +
+            "?latitude=-33.742" +
+            "&longitude=-53.373" +
+            "&hourly=temperature_2m,relative_humidity_2m,surface_pressure" +
+            "&forecast_days=2";
+
+        const respuesta = await fetch(url);
+
+        modelo = await respuesta.json();
+
+    } catch (e) {
+
+        console.error("Open-Meteo:", e);
+
+    }
+
+    function obtenerModelo(horas) {
+
+        if (!modelo || !modelo.hourly) {
+
+            return {
+                temperatura: temp,
+                humedad: hum,
+                presion: pres
+            };
+
+        }
+
+        return {
+            temperatura: modelo.hourly.temperature_2m[horas],
+            humedad: modelo.hourly.relative_humidity_2m[horas],
+            presion: modelo.hourly.surface_pressure[horas]
+        };
+
+    }
+
+    const meteo6 = obtenerModelo(6);
+    const meteo12 = obtenerModelo(12);
+    const meteo24 = obtenerModelo(24);
+
+    // -------------------------
+    // PRONÓSTICO ACTUAL
+    // -------------------------
+
+    const predActual = clasificar(pres, hum, vien);
+
     document.getElementById('prediccion').innerHTML =
-        '<span style="color:' + predActual.color + '; font-weight:bold;">' + predActual.texto + '</span>';
+        '<span style="color:' +
+        predActual.color +
+        '; font-weight:bold;">' +
+        predActual.texto +
+        '</span>';
 
-    document.getElementById('analisisContainer').style.display   = 'grid';
+    document.getElementById('analisisContainer').style.display = 'grid';
     document.getElementById('pronosticoExtendido').style.display = 'block';
 
-    document.getElementById('estabilidad').innerText = hum > 75 ? "⚠️ Inestable" : "✅ Estable";
-    document.getElementById('frentes').innerText     = vien > 15 ? "🌬 Frente ventoso detectado" : "✅ Sin frentes significativos";
+    document.getElementById('estabilidad').innerText =
+        Math.abs(tendenciaPres) > 2
+            ? "⚠️ Cambios atmosféricos detectados"
+            : "✅ Estable";
 
-    // +6 horas
-    var p6 = Math.round(pres * 0.998);
-    var h6 = Math.min(100, Math.round(hum * 1.02));
-    document.getElementById('pronostico6h').getElementsByClassName('pronostico-contenido')[0].innerHTML =
-        tarjetaHTML(clasificar(p6, h6, vien), temp, h6, p6);
+    document.getElementById('frentes').innerText =
+        vien > 15
+            ? "🌬 Frente ventoso detectado"
+            : "✅ Sin frentes significativos";
 
-    // +12 horas
-    var p12 = Math.round(pres * 0.995);
-    var h12 = Math.min(100, Math.round(hum * 1.04));
-    document.getElementById('pronostico12h').getElementsByClassName('pronostico-contenido')[0].innerHTML =
-        tarjetaHTML(clasificar(p12, h12, vien), temp - 1, h12, p12);
+    // -------------------------
+    // +6 HORAS
+    // -------------------------
 
-    // +24 horas
-    var p24 = Math.round(pres * 0.990);
-    var h24 = Math.min(100, Math.round(hum * 1.06));
-    document.getElementById('pronostico24h').getElementsByClassName('pronostico-contenido')[0].innerHTML =
-        tarjetaHTML(clasificar(p24, h24, vien), temp - 2, h24, p24);
+    const p6 =
+        Math.round(
+            (meteo6.presion + pres + tendenciaPres) / 2
+        );
+
+    const h6 =
+        Math.round(
+            (meteo6.humedad + hum + tendenciaHum) / 2
+        );
+
+    const t6 =
+        Math.round(
+            (meteo6.temperatura + temp + tendenciaTemp) / 2
+        );
+
+    document.getElementById('pronostico6h')
+        .getElementsByClassName('pronostico-contenido')[0]
+        .innerHTML =
+        tarjetaHTML(
+            clasificar(p6, h6, vien),
+            t6,
+            h6,
+            p6
+        );
+
+    // -------------------------
+    // +12 HORAS
+    // -------------------------
+
+    const p12 =
+        Math.round(
+            (meteo12.presion + pres + tendenciaPres) / 2
+        );
+
+    const h12 =
+        Math.round(
+            (meteo12.humedad + hum + tendenciaHum) / 2
+        );
+
+    const t12 =
+        Math.round(
+            (meteo12.temperatura + temp + tendenciaTemp) / 2
+        );
+
+    document.getElementById('pronostico12h')
+        .getElementsByClassName('pronostico-contenido')[0]
+        .innerHTML =
+        tarjetaHTML(
+            clasificar(p12, h12, vien),
+            t12,
+            h12,
+            p12
+        );
+
+    // -------------------------
+    // +24 HORAS
+    // -------------------------
+
+    const p24 =
+        Math.round(
+            (meteo24.presion + pres + tendenciaPres) / 2
+        );
+
+    const h24 =
+        Math.round(
+            (meteo24.humedad + hum + tendenciaHum) / 2
+        );
+
+    const t24 =
+        Math.round(
+            (meteo24.temperatura + temp + tendenciaTemp) / 2
+        );
+
+    document.getElementById('pronostico24h')
+        .getElementsByClassName('pronostico-contenido')[0]
+        .innerHTML =
+        tarjetaHTML(
+            clasificar(p24, h24, vien),
+            t24,
+            h24,
+            p24
+        );
 }
 
 window.toggleHistorial = function() {
