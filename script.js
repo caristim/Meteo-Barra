@@ -7,7 +7,7 @@ const firebaseConfig = {
     apiKey: "AIzaSyCwDBudjX8-PPNwAZ9DX7YhXoOv1J4WbfI",
     authDomain: "meteo-barra.firebaseapp.com",
     projectId: "meteo-barra",
-    storageBucket: "meteo-barra.firebasestorage.app"",
+    storageBucket: "meteo-barra.firebasestorage.app",
     messagingSenderId: "147460415233",
     appId: "1:147460415233:web:4301c0ac30259692c40500"
 };
