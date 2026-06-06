@@ -15,7 +15,7 @@ const firebaseConfig = {
 // Inicializar Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const medicionesRef = collection(db, "mediciones");
+const medicionesRef = collection(db, "meteorologia");
 
 // REGISTRAR SERVICE WORKER
 if ('serviceWorker' in navigator) {
