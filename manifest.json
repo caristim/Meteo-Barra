@@ -2,6 +2,8 @@
   "name": "Estación Meteorológica Inteligente",
   "short_name": "Meteo IA",
   "description": "Microclima local, IA meteorológica y Firebase Cloud",
+  "id": "/Meteo-Barra/",
+  "scope": "/Meteo-Barra/",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0d1b2a",
